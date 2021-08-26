@@ -1,0 +1,214 @@
+Aggregate
+  1. match, group
+  > db.persons.aggregate([
+      { $match: { gender: "female" }},
+      { $group: { _id: { state: "$location.state" }, totalPersons: {$sum: 1} }}
+    ])
+
+    결과 예시
+    { "_id" : { "state" : "eskişehir" }, "totalPersons" : 3 }
+    { "_id" : { "state" : "drôme" }, "totalPersons" : 2 }
+    { "_id" : { "state" : "bursa" }, "totalPersons" : 3 }
+    { "_id" : { "state" : "southern ostrobothnia" }, "totalPersons" : 7 }
+    
+    #확인하기
+      > db.persons.find({$and: [{"location.state" : "manitoba"}, {gender: "female"}]}).count()
+      11
+
+2. sort
+  > db.persons.aggregate([
+      { $match: { gender: "female" }},
+      { $group: { _id: { state: "$location.state" }, totalPersons: {$sum: 1} }},
+      { $sort: { totalPersons : 1 } }
+    ])
+  // 1은 오름차순! -1은 내림차순!
+
+3. 예시
+dob.age의 나이가 50보다 많은 사람을 성별에 따른 평균으로 나타내는 방법
+  db.persons.aggregate([
+    { $match: { "dob.age": {$gt: 50}}},
+    { $group: {_id: { gender: "$gender"}, totalPersons: {$sum: 1}, avgAge: {$avg: "$dob.age"}}},
+    { $sort: { totalPersons: -1}}
+  ])
+
+  결과 예시
+  { "_id" : { "gender" : "female" }, "totalPersons" : 1125, "avgAge" : 61.90577777777778 }
+  { "_id" : { "gender" : "male" }, "totalPersons" : 1079, "avgAge" : 62.066728452270624 }
+
+4. Project 심화 (보고싶은거만 보기!)
+  > db.persons.aggregate([
+    { $project: {
+      _id: 0, 
+      gender: 1,
+      location: 1,
+      fullName: { 
+        $concat: [
+          {$toUpper: { $substrCP: ["$name.first", 0, 1 ]}},
+          {$substrCP: ['$name.first', 1, {$subtract: [{$strLenCP: "$name.first"}, 1]}]},
+          " ",
+          {$toUpper: { $substrCP: ["$name.last", 0, 1 ]}},
+          {$substrCP: ['$name.last', 1, {$subtract: [{$strLenCP: "$name.last"}, 1]}]}
+           ]}}}
+  ])
+  결과 예시
+  { "gender" : "male", "fullName" : "Julio Martin" }
+  { "gender" : "male", "fullName" : "Joseph Kranz" } ...
+
+  {$strLenCP: "$name.first"} = name.first의 길이
+  {$subtract: [{$strLenCP: "$name.first"}, 1]} = name.first의 길이 - 1
+  {$substrCP: ['$name.first', 1, {$subtract: [{$strLenCP: "$name.first"}, 1]}]}
+   = name.first의 1번인덱스("Julio"면 u부터)부터 name.first의 길이 - 1 의 갯수만큼
+  따라서 위 메소드를 합치면
+  name.first의 맨앞글자만 대문자로 + name.first의 두번째글자부터 끝까지 + 띄어쓰기
+  + name.last의 맨앞글자만 대문자로 + name.last의 두번째글자부터 끝까지
+  즉 위의 결과로 따져보면 ["J", "ulio", " ", "M", "artin"]과 같은 의미이다.
+
+5. 위도경도 데이터를 geoJSON형태로 변환하기
+  > db.persons.aggregate([
+    { $project: {
+      _id: 0, 
+      gender: 1, 
+      name: 1, 
+      email: 1, 
+      location: {
+        type: "Point", 
+        coordinates: ["$location.coordinates.latitude", "$location.coordinates.longitude"]
+        }
+      }
+    },  // 먼저 이렇게 location의 정보를 간단하게만 아래로 걸러준다.
+    { $project: {
+      _id: 0, 
+      gender: 1,
+      location: 1,
+      fullName: { 
+        $concat: [
+          {$toUpper: { $substrCP: ["$name.first", 0, 1 ]}},
+          {$substrCP: ['$name.first', 1, {$subtract: [{$strLenCP: "$name.first"}, 1]}]},
+          " ",
+          {$toUpper: { $substrCP: ["$name.last", 0, 1 ]}},
+          {$substrCP: ['$name.last', 1, {$subtract: [{$strLenCP: "$name.last"}, 1]}]}
+           ]}}}
+  ])
+
+6. 생일 바꾸기: $convert
+  > db.persons.aggregate([
+    {$project: {
+      _id: 0,
+      gender: 1,
+      name: 1,
+      birthdate: {$convert: {input: "$dob.date", to: "date"}},
+      age: "$dob.age"
+    }}
+  ])
+
+  결과 예시
+  { "gender" : "female", "name" : { "title" : "miss", "first" : "maeva", "last" : "wilson" }, "birthdate" : ISODate("1962-08-11T20:51:07Z"), "age" : 56 }
+
+  6-1. convert말고 shortcut($toDate) 이용하기
+  > db.persons.aggregate([
+    {$project: {
+      _id: 0,
+      gender: 1,
+      name: 1,
+      birthdate: {$toDate: "$dob.date"},
+      age: "$dob.age"
+    }},
+    {$project: {
+      gender: 1,
+      name: 1,
+      birthdate: 1,
+      age: 1
+    }}
+  ])
+
+  결과 예시
+  { "gender" : "female", "name" : { "title" : "miss", "first" : "maeva", "last" : "wilson" }, "birthdate" : ISODate("1962-08-11T20:51:07Z"), "age" : 56 }
+
+  6-2. 출생년도 year로 표시하기
+  > db.persons.aggregate([
+    {$project: {
+      _id: 0,
+      gender: 1,
+      name: 1,
+      birthdate: {$toDate: "$dob.date"},
+      age: "$dob.age"
+    }},
+    {$project: {
+      gender: 1,
+      name: 1,
+      birthdate: 1,
+      age: 1
+    }},
+    { $group: {_id: {birthYear: {$isoWeekYear: "$birthdate"}}, numPersons: {$sum: 1}}},
+    { $sort: {numPersons: -1}}
+  ])
+
+  결과 예시
+  { "_id" : { "birthYear" : NumberLong(1955) }, "numPersons" : 113 }
+  { "_id" : { "birthYear" : NumberLong(1961) }, "numPersons" : 111 }
+  { "_id" : { "birthYear" : NumberLong(1960) }, "numPersons" : 110 }
+  { "_id" : { "birthYear" : NumberLong(1993) }, "numPersons" : 110 }
+  { "_id" : { "birthYear" : NumberLong(1975) }, "numPersons" : 107 }
+
+7. group vs project
+    group => 
+      n:1, Sum, Count, Average, Build Array
+    project =>
+      1:1, Inlcude/Exclude Fields, Transform Fields(within a Single Document)
+
+8. 배열 새로 만들어서 element 집어넣기
+  > db.friends.aggregate([
+    { 
+      $group: {
+        _id: { age: "$age"},
+        allHobbies: { $push: "$hobbies" }
+      }
+    }
+  ])
+
+  { "_id" : { "age" : 29 }, "allHobbies" : [ [ "Cooking", "Skiing" ], [ "Sports", "Cooking" ] ] }
+  { "_id" : { "age" : 30 }, "allHobbies" : [ [ "Eating", "Data Analytics" ] ] }
+
+  // 배열안에 배열이 들어가는 불상사!
+
+9. $unwind
+  > db.friends.aggregate([
+    { $unwind: "$hobbies"}
+  ])
+  // hobbies가 배열에 형태로 여러개의 데이터가 들어있다면 배열의 각각의 요소를 하나씩 가진 복수의 데이터로 바꿈
+  결과 예시
+  { "_id" : ObjectId("612756fd4af7afa65fcd3417"), "name" : "Maria", "hobbies" : "Cooking", "age" : 29, "examScores" : [ { "difficulty" : 3, "score" : 75.1 }, { "difficulty" : 8, "score" : 44.2 }, { "difficulty" : 6, "score" : 61.5 } ] }
+  { "_id" : ObjectId("612756fd4af7afa65fcd3417"), "name" : "Maria", "hobbies" : "Skiing", "age" : 29, "examScores" : [ { "difficulty" : 3, "score" : 75.1 }, { "difficulty" : 8, "score" : 44.2 }, { "difficulty" : 6, "score" : 61.5 } ] }
+  { "_id" : ObjectId("612756fd4af7afa65fcd3418"), "name" : "Manu", "hobbies" : "Eating", "age" : 30, "examScores" : [ { "difficulty" : 7, "score" : 52.1 }, { "difficulty" : 2, "score" : 74.3 }, { "difficulty" : 5, "score" : 53.1 } ] }
+  { "_id" : ObjectId("612756fd4af7afa65fcd3418"), "name" : "Manu", "hobbies" : "Data Analytics", "age" : 30, "examScores" : [ { "difficulty" : 7, "score" : 52.1 }, { "difficulty" : 2, "score" : 74.3 }, { "difficulty" : 5, "score" : 53.1 } ] }
+  { "_id" : ObjectId("612756fd4af7afa65fcd3419"), "name" : "Max", "hobbies" : "Sports", "age" : 29, "examScores" : [ { "difficulty" : 4, "score" : 57.9 }, { "difficulty" : 6, "score" : 62.1 }, { "difficulty" : 3, "score" : 88.5 } ] }
+  { "_id" : ObjectId("612756fd4af7afa65fcd3419"), "name" : "Max", "hobbies" : "Cooking", "age" : 29, "examScores" : [ { "difficulty" : 4, "score" : 57.9 }, { "difficulty" : 6, "score" : 62.1 }, { "difficulty" : 3, "score" : 88.5 } ] }
+
+  > db.friends.aggregate([
+    { $unwind: "$hobbies"},
+    { 
+      $group: {
+        _id: { age: "$age"},
+        allHobbies: { $push: "$hobbies" }
+      }
+    }
+  ])
+  결과 예시
+  { "_id" : { "age" : 29 }, "allHobbies" : [ "Cooking", "Skiing", "Sports", "Cooking" ] }
+  { "_id" : { "age" : 30 }, "allHobbies" : [ "Eating", "Data Analytics" ] }
+
+  // 하지만 중복된 데이터가 있다??
+
+10. 중복 데이터 삭제하기 ($addToSet)
+  > db.friends.aggregate([
+    { $unwind: "$hobbies"},
+    { 
+      $group: {
+        _id: { age: "$age"},
+        allHobbies: { $addToSet: "$hobbies" }
+      }
+    }
+  ])
+  결과 예시
+  { "_id" : { "age" : 29 }, "allHobbies" : [ "Skiing", "Sports", "Cooking" ] }
+  { "_id" : { "age" : 30 }, "allHobbies" : [ "Eating", "Data Analytics" ] }
