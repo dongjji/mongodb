@@ -1,0 +1,168 @@
+1. Validation Example: Collection을 만들면서 validation 기준을 정함.
+
+// post => collection name입니다.
+db.createCollection("post", {
+    validator: {
+        $jsonSchema: {
+            bsonType: "object",
+            required: ["title", "text", "creator", "comments"],
+            properties: {
+                title: {
+                    bsonType: "string",
+                    description: "must be a string and is required"
+                },
+                text: {
+                    bsonType: "string",
+                    description: "must be a string and is required"
+                },
+                creator: {
+                    bsonType: "objectId",
+                    description: "must be a string and is required"
+                },
+                comments: {
+                    bsonType: "array",
+                    description: "must be a string and is required",
+                    items: {
+                        bsonType: "object",
+                        required: ["text", "author"],
+                        properties: {
+                            text: {
+                                bsonType: "string",
+                                description: "must be a string and is required"
+                            },
+                            author: {
+                                bsonType: "objectId",
+                                description: "must be a string and is required"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+})
+
+///////에러 유도
+> db.post.insertOne({name: 'Max'})
+WriteError({
+	"index" : 0,
+	"code" : 121,
+	"errmsg" : "Document failed validation",
+	"op" : {
+		"_id" : ObjectId("610bc76efe37e6d391117c7c"),
+		"name" : "Max"
+	}
+}) :
+WriteError({
+	"index" : 0,
+	"code" : 121,
+	"errmsg" : "Document failed validation",
+	"op" : {
+		"_id" : ObjectId("610bc76efe37e6d391117c7c"),
+		"name" : "Max"
+	}
+})
+WriteError@src/mongo/shell/bulk_api.js:458:48
+mergeBatchResults@src/mongo/shell/bulk_api.js:855:49
+executeBatch@src/mongo/shell/bulk_api.js:919:13
+Bulk/this.execute@src/mongo/shell/bulk_api.js:1163:21
+DBCollection.prototype.insertOne@src/mongo/shell/crud_api.js:264:9
+@(shell):1:1
+
+
+2. Changing Validation Criteria
+// post => collection name입니다.
+
+> db.runCommand({collMod: "post", 
+    validator: {
+        $jsonSchema: {
+            bsonType: "object",
+            required: ["title", "text", "creator", "comments"],
+            properties: {
+                title: {
+                    bsonType: "string",
+                    description: "must be a string and is required"
+                },
+                text: {
+                    bsonType: "string",
+                    description: "must be a string and is required"
+                },
+                creator: {
+                    bsonType: "objectId",
+                    description: "must be a string and is required"
+                },
+                comments: {
+                    bsonType: "array",
+                    description: "must be a string and is required",
+                    items: {
+                        bsonType: "object",
+                        required: ["text", "author"],
+                        properties: {
+                            text: {
+                                bsonType: "string",
+                                description: "must be a string and is required"
+                            },
+                            author: {
+                                bsonType: "objectId",
+                                description: "must be a string and is required"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    validationAction: "error"
+})
+
+★★★★ validationAction: 'warn' => validation 오류시 경고 + 저장 진행함 ★★★★
+> db.runCommand({collMod: "post", 
+...     validator: {
+...         위의 조건과 동일
+...     },
+...     validationAction: "warn"
+... })
+{ "ok" : 1 }
+> db.post.insertOne({name: "Max"})
+{
+	"acknowledged" : true,
+	"insertedId" : ObjectId("610bc8fad7b7e4d86bc08abd")
+}
+
+★★★★ validationAction: 'error' => validation 오류시 경고 + 데이터를 저장하지 않음 ★★★★
+> db.runCommand({collMod: "post", 
+...     validator: {
+...         위의 조건과 동일
+...     },
+...     validationAction: "error"
+... })
+{ "ok" : 1 }
+> db.post.insertOne({name: "dongjji"})
+WriteError({
+	"index" : 0,
+	"code" : 121,
+	"errmsg" : "Document failed validation",
+	"op" : {
+		"_id" : ObjectId("610bc95fd7b7e4d86bc08abe"),
+		"name" : "dongjji"
+	}
+}) :
+WriteError({
+	"index" : 0,
+	"code" : 121,
+	"errmsg" : "Document failed validation",
+	"op" : {
+		"_id" : ObjectId("610bc95fd7b7e4d86bc08abe"),
+		"name" : "dongjji"
+	}
+})
+WriteError@src/mongo/shell/bulk_api.js:458:48
+mergeBatchResults@src/mongo/shell/bulk_api.js:855:49
+executeBatch@src/mongo/shell/bulk_api.js:919:13
+Bulk/this.execute@src/mongo/shell/bulk_api.js:1163:21
+DBCollection.prototype.insertOne@src/mongo/shell/crud_api.js:264:9
+@(shell):1:1 
+
+> db.post.find().pretty() : 1개의 데이터밖에 저장되어 있지 않음. (warn 시에만..)
+{ "_id" : ObjectId("610bc8fad7b7e4d86bc08abd"), "name" : "Max" }
+

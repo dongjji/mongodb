@@ -1,0 +1,148 @@
+1. one to one relation
+
+> db.persons.insertOne({name: "Max", age: 29, salary: 3000})
+
+> db.persons.findOne()
+{
+	"_id" : ObjectId("610ba77b7266ea2ca1b88ce5"),
+	"name" : "Max",
+	"age" : 29,
+	"salary" : 3000
+}
+
+> db.cars.insertOne({model: "BMW", price: 40000, owned: ObjectId("610ba77b7266ea2ca1b88ce5")})
+
+> db.cars.findOne()
+{
+	"_id" : ObjectId("610ba7917266ea2ca1b88ce6"),
+	"model" : "BMW",
+	"price" : 40000,
+	"owned" : ObjectId("610ba77b7266ea2ca1b88ce5")
+}
+ 
+2. one to many relation
+
+> db.cities.insertOne({name: "New York City", coordinates: {lat: 21, lng: 55}})
+
+> db.cities.findOne()
+{
+	"_id" : ObjectId("610ba9e27266ea2ca1b88ce9"),
+	"name" : "New York City",
+	"coordinates" : {
+		"lat" : 21,
+		"lng" : 55
+	}
+}
+
+> db.citizens.insertOne({name: "Max", cityID: ObjectId("610ba9e27266ea2ca1b88ce9")})
+> db.citizens.insertOne({name: "dongjji", cityID: ObjectId("610ba9e27266ea2ca1b88ce9")})
+
+> db.citizens.find().pretty()
+{
+	"_id" : ObjectId("610baa57fe37e6d391117c73"),
+	"name" : "Max",
+	"cityID" : ObjectId("610ba9e27266ea2ca1b88ce9")
+}
+{
+	"_id" : ObjectId("610baa61fe37e6d391117c74"),
+	"name" : "dongjji",
+	"cityID" : ObjectId("610ba9e27266ea2ca1b88ce9")
+}
+
+3. many to many relation
+
+> db.authors.insertMany([{name: "Max", age: 29, address: {street: "Main"}},{name: "dongjji", age: 25, address: {street:"Tree"}}])
+
+> db.books.insertOne({name: "My favorite Book", authors: [ObjectId("610bae5ffe37e6d391117c78"), ObjectId("610bae5ffe37e6d391117c79")]})
+
+> db.authors.find().pretty()
+{
+	"_id" : ObjectId("610bae5ffe37e6d391117c78"),
+	"name" : "Max",
+	"age" : 29,
+	"address" : {
+		"street" : "Main"
+	}
+}
+{
+	"_id" : ObjectId("610bae5ffe37e6d391117c79"),
+	"name" : "dongjji",
+	"age" : 25,
+	"address" : {
+		"street" : "Tree"
+	}
+}
+
+> db.books.find().pretty()
+{
+	"_id" : ObjectId("610bae9dfe37e6d391117c7a"),
+	"name" : "My favorite Book",
+	"authors" : [
+		ObjectId("610bae5ffe37e6d391117c78"),
+		ObjectId("610bae5ffe37e6d391117c79")
+	]
+}
+{
+	"_id" : ObjectId("610baefffe37e6d391117c7b"),
+	"name" : "My favorite Book2",
+	"authors" : [
+		ObjectId("610bae5ffe37e6d391117c78"),
+		ObjectId("610bae5ffe37e6d391117c79")
+	]
+}
+
+4. Merging
+///////////////////////////////////authors collection//////////books.authors/////////_id////////////////////
+> db.books.aggregate([{$lookup: {from: "authors", localField: "authors", foreignField: "_id", as: "creators"}}]).pretty()
+{
+	"_id" : ObjectId("610bae9dfe37e6d391117c7a"),
+	"name" : "My favorite Book",
+	"authors" : [
+		ObjectId("610bae5ffe37e6d391117c78"),
+		ObjectId("610bae5ffe37e6d391117c79")
+	],
+	"creators" : [
+		{
+			"_id" : ObjectId("610bae5ffe37e6d391117c78"),
+			"name" : "Max",
+			"age" : 29,
+			"address" : {
+				"street" : "Main"
+			}
+		},
+		{
+			"_id" : ObjectId("610bae5ffe37e6d391117c79"),
+			"name" : "dongjji",
+			"age" : 25,
+			"address" : {
+				"street" : "Tree"
+			}
+		}
+	]
+}
+{
+	"_id" : ObjectId("610baefffe37e6d391117c7b"),
+	"name" : "My favorite Book2",
+	"authors" : [
+		ObjectId("610bae5ffe37e6d391117c78"),
+		ObjectId("610bae5ffe37e6d391117c79")
+	],
+	"creators" : [
+		{
+			"_id" : ObjectId("610bae5ffe37e6d391117c78"),
+			"name" : "Max",
+			"age" : 29,
+			"address" : {
+				"street" : "Main"
+			}
+		},
+		{
+			"_id" : ObjectId("610bae5ffe37e6d391117c79"),
+			"name" : "dongjji",
+			"age" : 25,
+			"address" : {
+				"street" : "Tree"
+			}
+		}
+	]
+}

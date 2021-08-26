@@ -1,0 +1,108 @@
+0. basic
+show databases
+show dbs
+use db
+
+1. mongodb CRUD(IFUD) method
+db.collection.insert({},{})
+db.collection.find({})
+db.collection.updateOne({}, {$set{}})
+  db.colection.updateMany...
+db.collection.deleteOne({})
+  db.collection.deleteMany({}) <= no criteria is delete All data
+
+2. 객체 안의 객체 property에 접근하는 방법
+db.collection.find('상위propertyname: 하위propertyname': 값, ...)
+
+3. advanced find method
+형식: db.collection.find({age : {$gt: 8}})
+$eq = equal
+$gt = greater than
+$gte = greater than and equal
+$in = in an array
+$lt = less than
+$lte = les than and equal
+$ne = not equal
+$nin = not in array
+
+$in method 
+db.collection.find({breed: {$in: ['Mutt', 'Corgi']}})
+breed라는 property에 배열안에 있는 값이 값으로 설정되어 있는 data값들을 불러오는 것
+
+4.  논리연산자 $and $not $nor $or
+example... 여러 메소드간 중첩해서 사용 or 메소드와 lte 메소드를 사용
+db.collection.find({$or: [{'property.peroperty': value}, {anotherProperty: {$lte: value}]})
+
+5. node에서 db에 insert하기 with mongoose
+Movie.insertMany([
+    { title: "Amelie", year: 2001, score: 8.3, rating: "R" },
+    { title: "Alien", year: 1979, score: 8.1, rating: "R" },
+    { title: "The Iron Giant", year: 1999, score: 7.5, rating: "PG" },
+    { title: "Stand By Me", year: 1986, score: 8.6, rating: "R" },
+    { title: "Moonrise Kingdom", year: 2012, score: 7.3, rating: "PG-13" },
+]).then((data) => {
+    console.log("IT WORKED!");
+    console.log(data);
+});
+
+6. node에서 db 검색, 수정하기 with mongoose READ , UPDATE (mongoose 는 node환경에서 mongo를 제어할 수 있게 해주는 mongoDB ODM)
+model.find({})
+model.update({match}, {new updating data}).then(res => console.log(res)) // no using $set{}
+// ex) Movie.updateOne({title: 'Alien'}, {title: 'dongjoon'}).then(res => console.log(res))
+// 왜인지 모르겠지만 .then을 안쓰면 업데이트가 실행되지 않음.
+update updateMany 둘다 가능
+model.findOneAndUpdate({match}, {new updating data}).then(res => console.log(res))
+// 위 메소드를 실행한 직후에 콘솔에 표현하는 것은 find에 해당했을 때의 데이터 정보이고
+// db에 업데이트한 정보는 표현하지 않음. {new : false}가 default임
+// 메소드를 실행한 직후에 업데이트 된 정보를 보고 싶다면
+model.findOneAndUpdate({match}, {new updating data}, {new: true}).then(res => console.log(res)) 로 쓰면 됨.
+
+7. node에서 db 삭제하기 with mongoose DELETE
+model.remove({match}).then(res => console.log(res))
+model.deleteMany({match}).then(res => console.log(res))
+model.findOneAndDelete({match}).then(res => console.log(res))
+
+8. schema validation
+property: {
+  type: String,
+  min: [0, message if errors occur],
+  default: 0,
+  enum: ['S', 'M', 'L', 'XL'] // validate
+  required: true,
+  maxlength: 20,
+}
+
+9. instance methods, statics methods
+productSchema.methods.toggleOnSale = function() {
+    this.onSale = !this.onSale;
+    return this.save();
+};
+
+productSchema.methods.addCategory = function(newCat) {
+    this.categories.push(newCat);
+    return this.save();
+};
+
+productSchema.statics.fireSale = function() {
+    return this.updateMany({}, { onSale: true, price: 0 });
+};
+
+10. mongoose virtuals // 프로퍼티가 있는거같지만 없음 가상의 프로퍼티
+const personSchema = new mongoose.Schema({
+    first: String,
+    last: String
+})
+
+personSchema.virtual('fullName').get(function () {
+    return `${this.first} ${this.last}`
+})
+
+11. middleware : save하면 뭐가되었든 아래의 메소드대로 강제 설정되어 저장됨.
+personSchema.pre("save", async function() {
+    this.first = "YO";
+    this.last = "MAMA";
+    console.log("ABOUT TO SAVE!!!!");
+});
+personSchema.post("save", async function() {
+    console.log("JUST SAVED!!!!");
+});

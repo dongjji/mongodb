@@ -1,0 +1,146 @@
+1. createIndex(), explain(), explain('executionStats')
+  > db.persons.explain().find({"dob.age" : {$gt: 60}})
+  {
+          "queryPlanner" : {
+                  "plannerVersion" : 1,
+                  "namespace" : "personData.persons",
+                  "indexFilterSet" : false,
+                  "parsedQuery" : {
+                          "dob.age" : {
+                                  "$gt" : 60
+                          }
+                  },
+                  "queryHash" : "FC9E47D2",
+                  "planCacheKey" : "FC9E47D2",
+                  "winningPlan" : {
+                          "stage" : "COLLSCAN",
+                          "filter" : {
+                                  "dob.age" : {
+                                          "$gt" : 60
+                                  }
+                          },
+                          "direction" : "forward"
+                  },
+                  "rejectedPlans" : [ ]
+          },
+          "serverInfo" : {
+                  "host" : "USER-6QP0KO57VD",
+                  "port" : 27017,
+                  "version" : "4.4.6",
+                  "gitVersion" : "72e66213c2c3eab37d9358d5e78ad7f5c1d0d0d7"
+          },
+          "ok" : 1
+  }
+  > db.persons.explain('executionStats').find({"dob.age": {$gt: 60}})
+     "executionStats" : {
+                "executionSuccess" : true,
+                "nReturned" : 1222,    <= db.persons.find({"dob.age" : {$gt: 60}}).count() = 1222
+                "executionTimeMillis" : 5,
+                "totalKeysExamined" : 0,
+                "totalDocsExamined" : 5000,
+                "executionStages" : {
+                        "stage" : "FETCH",
+                        "nReturned" : 1222,
+                        "executionTimeMillisEstimate" : 0,
+                        "works" : 1223,
+                        "advanced" : 1222,
+                       ...
+
+☆ COLLSCAN vs IXSCAN: 모든 데이터를 다 확인해야되는 경우엔 COLLSCAN이 빠르다. IXSCAN 데이터의 일부분만 탐색할 때 유리하다.
+  db.persons.createIndex({"dob.age": 1}) // 1이면 dob.age를 기준으로 오름차순으로 index 배정 -1이면 내림차순
+    > db.persons.createIndex({"dob.age": 1})
+      {
+              "createdCollectionAutomatically" : false,
+              "numIndexesBefore" : 1,
+              "numIndexesAfter" : 2,
+              "ok" : 1
+      }
+
+    실행 후 > db.persons.explain('executionStats').find({"dob.age": {$gt: 60}})
+     "executionStats" : {
+                "executionSuccess" : true,
+                "nReturned" : 1222,    <= db.persons.find({"dob.age" : {$gt: 60}}).count() = 1222
+                "executionTimeMillis" : 3,  <- 시간이 줄어든 걸 확인할 수 있음.
+                "totalKeysExamined" : 1222,
+                "totalDocsExamined" : 1222,
+                "executionStages" : {
+                        "stage" : "FETCH",
+                        "nReturned" : 1222,
+                        "executionTimeMillisEstimate" : 0,
+                        "works" : 1223,
+                        "advanced" : 1222,
+                       ...
+
+2 dropIndexes(), dropIndex({})
+  db.persons.dropIndexes()
+  db.persons.dropIndex({"dob.age" : 1});
+
+3. db.persons.createIndex({gender: 1})
+  db.persons.createIndex({"dob.age": 1, gender: 1})
+
+4. getIndexes()
+  db.persons.getIndexes() : index 기준과 종류..
+  > db.persons.getIndexes()
+[
+        {
+                "v" : 2,
+                "key" : {
+                        "_id" : 1
+                },
+                "name" : "_id_"
+        },
+        {
+                "v" : 2,
+                "key" : {
+                        "dob.age" : 1
+                },
+                "name" : "dob.age_1"
+        },
+        {
+                "v" : 2,
+                "key" : {
+                        "dob.age" : -1
+                },
+                "name" : "dob.age_-1"
+        }
+]
+
+5. unique 
+  db.persons.getIndexes({email: 1}, {unique: true})
+     => unique하지 않으면 error를 발생
+     => no value도 2개 이상이면 unique하지 않아서 error를 발생
+
+6. Partial Filters (말그대로 세부적으로 필터링 하는 방법)
+  db.persons.createIndex({"dob.age": 1}, {partialFilterExpression: {gender: "male"}})
+    db.persons.explain().find({"dob.age": {$gt: 60}}) => COLSCAN 실행
+    db.persons.explain().find({"dob.age": {$gt: 60}, gender: "male"}) => IXSCAN 실행
+  db.persons.createIndex({"dob.age": 1}, {partialFilterExpression: {"dob.age": {$gt: 60}}})
+    db.persons.explain().find({"dob.age": {$gt: 60}}) => IXSCAN 실행
+
+7. Partial Index 적용하기
+  db.persons.createIndex({email: 1}, {unique: true, partialFilterExpression: {email: {$exists: true}}})
+    => email이 있는 경우에만 unique한지 판단하기
+
+8. Time-To-Live Index
+  db.persons.createIndex({createdAt: 1}, {expiresFterSeconds: 10}) 10초뒤에 createdAt속성 삭제
+
+9. explain() - queryPlanner, executionStats, allPlansExecution
+
+10. Winning Plan - Rejects a Plan
+  db.persons.createIndex({name: 1, age: 1})
+  db.persons.explain('executionStats').find({name: "max", age: 30}) // name과 age의 순서는 상관없음.
+    => IXSCAN으로 name_1,age_1 인덱스를 기준으로 스캔함
+      , name만을 기준으로 혹은 age만을 기준으로 스캔한는 것은 reject함
+    => 가장 먼저 cached된 경우를 winning plan으로 설정
+
+
+11. text index
+  db.products.createIndex({description: "text"})
+  db.products.find({$text: {$search: "awesome"}}) description에 awesome이 있는 데이터 검색
+  db.products.find({$text: {$search: "red book"}}) description에 red가 있는 데이터와 book이 있는 데이터 모두 검색
+  db.products.find({$text: {$search: "\"red book\""}}) description에 red book이 있는 데이터 검색
+  db.products.find({$text: {$search: "\"red book\" -t-shirt"}}) description에 red book이 있는 데이터 중 t-shirt가 있는 것을 제외하고 검색
+
+12. default language
+  db.products.createIndex({title: "text", description: "text"}, {default_language: "english", weights: {title: 1, description: 10}})
+  db.products.find({$text: {$search: "red"}}, {score: {$meta: "textScore"}})

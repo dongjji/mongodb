@@ -1,0 +1,236 @@
+{% comment %} https://docs.mongodb.com/manual/reference/operator/query/ {% endcomment %}
+
+1. READ method
+db.collectionName.method({filter})
+ => db.myCollection.find({age: 32})
+db.collectionName.method({Field: {operator: value}})
+ => db.myCollection.find({age: {$gt: 30}})
+...
+
+2. 앞에서 다루지 않았던 내용.
+db.movies.find({genres: ["Drama"]})  vs  db.movies.find({genres: "Drama"})
+    1번은 정확히 장르가 Drama만 있는 길이 1의 배열인 것만 찾는 것이고
+    2번은 장르 속에 Drama가 있는 것들을 찾는 것.
+
+3. $in , $nin
+    db.movies.find({runtime: {$in: [30, 42]}})
+
+4. $or , $nor , $and
+    db.movies.find({$or : [{"rating.average" : {$lt : 5}}, {genres: "Drama"}]}) : 둘중에 하나라도 맞다면
+    db.movies.find({$nor : [{"rating.average" : {$lt : 5}}, {genres: "Drama"}]}) : 둘중에 하나라도 아니라면
+    db.movies.find({$and : [{"rating.average" : {$lt : 5}}, {genres: "Drama"}]}) : 둘다 맞다면
+        === db.movies.find({"rating.average" : {$gt: 5}, genres: "Drama"})
+
+5. count()
+    db.movies.find({"rating.average": {$lt: 5}}).count()
+    db.movies.count() === db.movies.find().count()
+
+6. $not
+    db.movies.find({runtime: {$not: {$eq: 60}}}) === db.movies.find({runtime: {$ne: 60}})
+
+7. $exist
+    db.movies.find({age: {$exists: false}})
+    db.movies.find({age: {$exists: false, age: $gt: 30}})
+    db.movie.find({"rating.average": {$exists: true, $gt: 4}})
+
+8. $type
+    double, string, object, array, binData, undefined, objectId, bool, date, null, regex, dbPointer, javascript, symbol, ...
+    db.movie.find({genres: {$type: "array"}})
+
+9. $regex
+    db.movies.find({summary: "musical"}) => summary : "musical"
+    db.movies.find({summary: {$regex: "musical"}}) => summary에 "musical"이 포함되어 있으면 true
+
+10. $expr
+    db.movies.find({$expr: {$gt: ["rating.average", "runtime"]}}) rating.average > runtime 인 경우 
+    db.movies.find({$expr: {$gte: ["rating.average", "runtime"]}}) rating.average >= runtime 인 경우 
+    db.movies.find({$expr: {$lt: ["rating.average", "runtime"]}}) rating.average < runtime 인 경우 
+    db.movies.find({$expr: {$lte: ["rating.average", "runtime"]}}) rating.average <= runtime 인 경우 
+
+11 $cond ($if, ...) => { $cond: { if: <boolean-expression>, then: <true-case>, else: <false-case> } }
+    db.movies.find({$expr: {$lt: [{$cond: {if: {$gte: ["rating.average", 6]},
+        then: {$add: ["$rating.average", 50]},
+        else: {$add: ["$rating.average", 60]},
+    }}, "$runtime"]}})
+
+    rating.average += rating.average >= 6 ? 50 : 60
+    rating.average < runtime  인 경우
+
+12. Query Array
+    user collection의 document의 형태가
+    {
+        "_id": ~,
+        "hobbies" : [
+            {
+                title: "Sports"
+            }
+        ]
+    }
+    이러한 형태일 때 hobbies 의 요소들 중  title이 Sports인 것이 있을 경우 뽑아내려면
+    => db.find({"hobbies.title" : "Sports"}) 이런식으로 표현하면 된다.
+
+macOS에서 하다가 windows를 사용하니까 에러가 발생하였다.
+windows에서는 default로 mongoimport가 따라오지 않았다..
+MongoDB install center에서 mongodb-database-tools-windows를 받아준 뒤에
+압축파일을 해제하고 bin 디렉토리 안에서
+./mongoimport (파일디렉토리/파일명) -d (databaseName) -c (collectionName) --jsonArray를 해줬다.
+Linux환경보다 좀더 복잡했다...
+
+13. $size == 배열의 길이
+    > db.users.insertOne({name: "Chris", hobbies: ['Cooking', 'Sports', 'Hiking']})
+    ...
+    > db.users.find({hobbies: {$size: 3}})
+    => chris에 대한 정보 ...
+
+14. $all
+    db.movies.find({genre: {$all: ["action", "thriller"]}})
+    => 장르가 ["action", "thriller"]를 포함하는 경우 모두(순서가 달라도: ["thriller", "action"])
+
+    db.movies.find({genre: ["action", "thriller"]})
+    => 정확히 장르가 ["action", "thriller"]인 경우만
+
+15. $elemMatch vs $and
+    $and의 허점
+    {
+        name: "Max",
+        hobbies: [
+            {
+                title: "Sports",
+                frequency: 3   
+            },
+            {
+                title: "Cooking",
+                frequency: 6
+            }
+        ]
+    }
+
+    {
+        name: "Chris",
+        hobbies: [
+            {
+                title: "Sports",
+                frequency: 2   
+            },
+            {
+                title: "Cooking",
+                frequency: 3
+            }
+        ]
+    }
+    두 개의 데이터가 있을 때,
+    db.users.find({$and: [{"hobbies.title": "Sports"}, {"hobbies.frequency": {$gte: 3}}]})
+    의 뜻은 hobbies.title이 Sports이고 frequency가 3이상이어야 하므로
+    우리가 생각하는 답은 Max에 대한 데이터만 나와야 하지만, 두 데이터 모두 출력이 된다.
+    그 이유는 Chris의 데이터 중 hobbies.title이 Sports가 존재하고 hobbies.frequency가 Cooking에 존재하기때문에
+    true로 여겨져 있기 때문에 그렇다. 따라서 이 때, $elemMatch를 사용하여 이를 해결할 수 있다.
+
+    예시: db.users.find({hobbies: {$elemMatch: {title: "Sports", frequency: {$gte: 3}} }})
+
+16. Client(Cursor) <=> MongoDb Server/ Database
+    db.movies.find()의 데이터가 20개 이상인 경우 한번에 20개의 데이터만 보여준다
+    > Type "it" for more를 볼 수 있을 것이다.
+
+    const dataCursor = db.movies.find()
+    dataCursor.next() // 다음 데이터를 하나씩 보여줌
+    dataCursor.forEach(doc => { // 모든 데이터를 돌면서 보여줌
+        printjson(doc)
+    })
+    dataCursor.next() // 에러: 데이터를 다 돌았으므로 에러가 발생
+    dataCursor.hasNext() // 다음 데이터가 있는지 확인 가능
+
+17. Sorting Cursor Results: 1(오름차순) -1(내림차순)
+    db.movies.find().sort({"rating.average": 1}).pretty()
+    db.movies.find().sort({"rating.average": 1, runtime: -1}).pretty()
+    average를 오름차순으로 정렬한 후에 값이 같은 것은 runtime을 기준으로 내림차순으로 정렬
+
+18. Skip
+    16에서 설명했듯이 20개의 데이터씩만 보여주기 때문에 skip(n) 메소드를 사용하면 n개의 데이터를 스킵한 후에 
+    데이터를 보여준다
+    db.movies.find().sort({"rating.average": 1, runtime: -1}).skip(10).pretty() // 10개의 데이터를 스킵
+
+19. Limit
+    limit(n) 메소드를 사용하면 n개의 데이터만 보여준다 Type "it" for more 같은게 뜰리 없다.
+    하지만
+    db.movies.find().sort({"rating.average": 1, runtime: -1}).skip(10).limit(10).count()를 하게 되면
+        조건에 맞는 모든 데이터의 갯수는 정확하게 출력된다
+    db.movies.find().sort({"rating.average": 1, runtime: -1}).skip(10).limit(10)를 하게 되면
+        조건에 맞는 데이터 중 10개의 데이터만을 출력하게 된다.
+        조건에 맞는 데이터가 n개라면 위의 count()시에는 limit(10)이 있어도 출력값이 n이 되지만 
+        limit(10)만 하게 되면 10개의 데이터만 추출된다
+    순서는 상관없이 작성해도 된다. mongodb에서 자동적으로 sort -> skip -> limit순으로 해석한다.
+
+20. Projection
+    db.movies.find({}, {title: 1, _id: 0}).pretty()
+    원하는 key의 value값만 보고 싶으면 key: 1을 설정하고 그 반대는 0으로 설정하면 보이지 않게 된다
+    예시
+    > db.movies.find({}, {rating: 1, _id: 0}).pretty()
+        { "rating" : { "average" : 6.5 } }
+        { "rating" : { "average" : 8.3 } }
+        { "rating" : { "average" : 7.8 } }
+        { "rating" : { "average" : 7.5 } }
+        { "rating" : { "average" : 8.4 } }
+        { "rating" : { "average" : 7.6 } }
+        { "rating" : { "average" : 6.7 } }
+        { "rating" : { "average" : 7.8 } }
+        { "rating" : { "average" : 8 } }
+        { "rating" : { "average" : 6.7 } }
+        { "rating" : { "average" : 8.3 } }
+        { "rating" : { "average" : 8.3 } }
+        { "rating" : { "average" : 8.5 } }
+        { "rating" : { "average" : 8 } }
+        { "rating" : { "average" : 8.1 } }
+        { "rating" : { "average" : 7.9 } }
+        { "rating" : { "average" : 9.2 } }
+        { "rating" : { "average" : 8.1 } }
+        { "rating" : { "average" : 8.8 } }
+        { "rating" : { "average" : 8 } }
+        Type "it" for more
+
+21. Projection in Array
+    db.movies.find({genres: {$all: ["Drama", "Horror"]}}, {"genres.$": 1})
+        { "_id" : ObjectId("6113e6e7ac7c31f1850e9c94"), "genres" : [ "Horror" ] }
+        { "_id" : ObjectId("6113e6e7ac7c31f1850e9c99"), "genres" : [ "Horror" ] }
+        { "_id" : ObjectId("6113e6e7ac7c31f1850e9c9d"), "genres" : [ "Horror" ] }
+        { "_id" : ObjectId("6113e6e7ac7c31f1850e9ca3"), "genres" : [ "Horror" ] }
+        { "_id" : ObjectId("6113e6e7ac7c31f1850e9ca5"), "genres" : [ "Horror" ] }
+        { "_id" : ObjectId("6113e6e7ac7c31f1850e9ca7"), "genres" : [ "Horror" ] }
+        { "_id" : ObjectId("6113e6e7ac7c31f1850e9caa"), "genres" : [ "Horror" ] }
+        { "_id" : ObjectId("6113e6e7ac7c31f1850e9cab"), "genres" : [ "Horror" ] }
+        { "_id" : ObjectId("6113e6e7ac7c31f1850e9cda"), "genres" : [ "Horror" ] }
+        { "_id" : ObjectId("6113e6e7ac7c31f1850e9d27"), "genres" : [ "Horror" ] }
+        { "_id" : ObjectId("6113e6e7ac7c31f1850e9d2a"), "genres" : [ "Horror" ] }
+        { "_id" : ObjectId("6113e6e7ac7c31f1850e9d49"), "genres" : [ "Horror" ] }
+        { "_id" : ObjectId("6113e6e7ac7c31f1850e9d4a"), "genres" : [ "Horror" ] }
+        { "_id" : ObjectId("6113e6e7ac7c31f1850e9d4c"), "genres" : [ "Horror" ] }
+        { "_id" : ObjectId("6113e6e7ac7c31f1850e9d5c"), "genres" : [ "Horror" ] }
+        { "_id" : ObjectId("6113e6e7ac7c31f1850e9d63"), "genres" : [ "Horror" ] }
+        { "_id" : ObjectId("6113e6e7ac7c31f1850e9d6c"), "genres" : [ "Horror" ] }
+    => Drama로 찾은 뒤 Horror를 찾기 때문에 Horror가 메인이므로 Horror만 보여짐
+
+    db.movies.find({genres: "Drama"}, {genres: {$elemMatch: {$eq: "Horror"}}}).pretty()
+        { "_id" : ObjectId("6113e6e7ac7c31f1850e9c8f") }
+        { "_id" : ObjectId("6113e6e7ac7c31f1850e9c90") }
+        { "_id" : ObjectId("6113e6e7ac7c31f1850e9c91") }
+        { "_id" : ObjectId("6113e6e7ac7c31f1850e9c93") }
+        { "_id" : ObjectId("6113e6e7ac7c31f1850e9c94"), "genres" : [ "Horror" ] }
+        { "_id" : ObjectId("6113e6e7ac7c31f1850e9c95") }
+        { "_id" : ObjectId("6113e6e7ac7c31f1850e9c96") }
+        { "_id" : ObjectId("6113e6e7ac7c31f1850e9c97") }
+        { "_id" : ObjectId("6113e6e7ac7c31f1850e9c99"), "genres" : [ "Horror" ] }
+        { "_id" : ObjectId("6113e6e7ac7c31f1850e9c9b") }
+        { "_id" : ObjectId("6113e6e7ac7c31f1850e9c9c") }
+        { "_id" : ObjectId("6113e6e7ac7c31f1850e9c9d"), "genres" : [ "Horror" ] }
+        { "_id" : ObjectId("6113e6e7ac7c31f1850e9c9e") }
+        { "_id" : ObjectId("6113e6e7ac7c31f1850e9ca0") }
+        { "_id" : ObjectId("6113e6e7ac7c31f1850e9ca1") }
+        { "_id" : ObjectId("6113e6e7ac7c31f1850e9ca3"), "genres" : [ "Horror" ] }
+        { "_id" : ObjectId("6113e6e7ac7c31f1850e9ca5"), "genres" : [ "Horror" ] }
+        { "_id" : ObjectId("6113e6e7ac7c31f1850e9ca6") }
+        { "_id" : ObjectId("6113e6e7ac7c31f1850e9ca7"), "genres" : [ "Horror" ] }
+        { "_id" : ObjectId("6113e6e7ac7c31f1850e9ca8") }
+    장르에 Drama가 있는 데이터들을 중에 Horror가 있으면 genre값을 보여줌 (이때도 Horror가 main이 됨.)
+
+22. $slice
+    db.movies.find({"rating.average": {$gt: 9}}, {genres: {$slice: 3}, name: 1}).pretty() // 갯수 활용
+    db.movies.find({"rating.average": {$gt: 9}}, {genres: {$slice: [1, 2]}, name: 1}).pretty() // array index 활용

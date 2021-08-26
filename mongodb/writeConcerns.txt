@@ -1,0 +1,54 @@
+1. w옵션: 값으로 설정된 replica set수만큼 데이터 쓰기가 완료되었는지만 확인해서 클라이언트에게 보고함.
+w옵션 값으로 majority를 설정하게 되면 replica set의 과반수 이상을 자동으로 설정하게 됨.
+
+> db.persons.insertOne({name: "Chrissy", age: 41}, {writeConcern: {w: 0}})
+{ "acknowledged" : false }  <----------- 차이점!
+> db.persons.find().pretty()
+{
+	"_id" : ObjectId("610d52a1c9c9913762275745"),
+	"name" : "Chrissy",
+	"age" : 41
+}
+////////////////////////////////////////////////////////////////////////////////////////////////
+> db.persons.insertOne({name: "dongdong", age: 30}, {writeConcern: {w: 1}})
+{
+	"acknowledged" : true,
+	"insertedId" : ObjectId("610d52dec9c9913762275746")
+}
+> db.persons.find().pretty()
+{
+	"_id" : ObjectId("610d52a1c9c9913762275745"),
+	"name" : "Chrissy",
+	"age" : 41
+}
+{
+	"_id" : ObjectId("610d52dec9c9913762275746"),
+	"name" : "dongdong",
+	"age" : 30
+}
+
+2. j옵션의 차이점
+> db.persons.insertOne({name: "michael", age: 20}, {writeConcern: {w: 1, j: false}})
+{
+	"acknowledged" : true,
+	"insertedId" : ObjectId("610d5331c9c9913762275747")
+}
+> db.persons.insertOne({name: "milk", age: 25}, {writeConcern: {w: 1, j: true}})
+{
+	"acknowledged" : true,
+	"insertedId" : ObjectId("610d5340c9c9913762275748")
+}
+j옵션을 false로 설정하게 되면 모든 데이터는 로컬영역에서 매우 빠르게 작동한다.
+j옵션을 true로 설정하게 되면 w옵션에 따른 레플리카 셋의 동기화가 완료된 후 journaling또한 완료되야만 클라이언트에게 보고함.
+
+3. wtimeout Option: primary cluster에서 secondary cluster로 데이터 동기화 시 걸리는 timeoout을 설정함.
+timeout보다 초과하면 error를 반환하게 됨.
+
+4. writeConcernMajorityJournalDefault: true
+w: 'majority', j: true 옵션
+mongoDB는 데이터의 내구성을 위해 기본적값으로 true를 가지고 있다.
+
+5. getLastErrorDefaults : {
+    "w": "majority",
+    "wtimeout" : 0
+}

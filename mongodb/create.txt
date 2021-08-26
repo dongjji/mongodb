@@ -1,0 +1,145 @@
+1. Create Document
+db.collection.insertOne({})
+db.collection.insertMany([{}, {}])
+objectId를 생성시에 보여줌.
+
+db.colection.insert({}, {}) -> 굳이 사용하지 않는 것 같음 혼동하기 쉬워서
+objectId를 생성시에 보여주지 않음.
+
+mongo import <file.json> -d cars -c carList --drop --jsonArray...
+
+2. _id가 겹치는 오류(index와 duplicate key error가 주어짐)
+> db.persons.insertMany([{_id: "a", name: "A"}, {_id: "b", name: "B"}, {_id: "c", name:" C"}])
+{ "acknowledged" : true, "insertedIds" : [ "a", "b", "c" ] }
+> db.persons.insertMany([{_id: "d", name: "D"}, {_id: "b", name: "B"}, {_id: "e", name:" E"}])
+
+uncaught exception: BulkWriteError({
+	"writeErrors" : [
+		{
+			"index" : 1,
+			"code" : 11000,
+			"errmsg" : "E11000 duplicate key error collection: mongodb.persons index: _id_ dup key: { _id: \"b\" }",
+			"op" : {
+				"_id" : "b",
+				"name" : "B"
+			}
+		}
+	],
+	"writeConcernErrors" : [ ],
+	"nInserted" : 1,
+	"nUpserted" : 0,
+	"nMatched" : 0,
+	"nModified" : 0,
+	"nRemoved" : 0,
+	"upserted" : [ ]
+}) :
+BulkWriteError({
+	"writeErrors" : [
+		{
+			"index" : 1,
+			"code" : 11000,
+			"errmsg" : "E11000 duplicate key error collection: mongodb.persons index: _id_ dup key: { _id: \"b\" }",
+			"op" : {
+				"_id" : "b",
+				"name" : "B"
+			}
+		}
+	],
+	"writeConcernErrors" : [ ],
+	"nInserted" : 1,
+	"nUpserted" : 0,
+	"nMatched" : 0,
+	"nModified" : 0,
+	"nRemoved" : 0,
+	"upserted" : [ ]
+})
+BulkWriteError@src/mongo/shell/bulk_api.js:367:48
+BulkWriteResult/this.toError@src/mongo/shell/bulk_api.js:332:24
+Bulk/this.execute@src/mongo/shell/bulk_api.js:1186:23
+DBCollection.prototype.insertMany@src/mongo/shell/crud_api.js:326:5
+@(shell):1:1
+
+
+> db.persons.find().pretty()
+{ "_id" : "a", "name" : "A" }
+{ "_id" : "b", "name" : "B" }
+{ "_id" : "c", "name" : " C" }
+{ "_id" : "d", "name" : "D" }
+=> 에러가 난 직전까지의 데이터는 입력됨.
+
+ordered 속성값을 false로 주게 되면 오류가 난 document들을 제외한 나머지들은 저장이 된다.
+> db.persons.insertMany([{_id: "d", name: "D"}, {_id: "b", name: "B"}, {_id: "e", name:" E"}], {ordered: false})
+uncaught exception: BulkWriteError({
+	"writeErrors" : [
+		{
+			"index" : 0,
+			"code" : 11000,
+			"errmsg" : "E11000 duplicate key error collection: mongodb.persons index: _id_ dup key: { _id: \"d\" }",
+			"op" : {
+				"_id" : "d",
+				"name" : "D"
+			}
+		},
+		{
+			"index" : 1,
+			"code" : 11000,
+			"errmsg" : "E11000 duplicate key error collection: mongodb.persons index: _id_ dup key: { _id: \"b\" }",
+			"op" : {
+				"_id" : "b",
+				"name" : "B"
+			}
+		}
+	],
+	"writeConcernErrors" : [ ],
+	"nInserted" : 1,
+	"nUpserted" : 0,
+	"nMatched" : 0,
+	"nModified" : 0,
+	"nRemoved" : 0,
+	"upserted" : [ ]
+}) :
+BulkWriteError({
+	"writeErrors" : [
+		{
+			"index" : 0,
+			"code" : 11000,
+			"errmsg" : "E11000 duplicate key error collection: mongodb.persons index: _id_ dup key: { _id: \"d\" }",
+			"op" : {
+				"_id" : "d",
+				"name" : "D"
+			}
+		},
+		{
+			"index" : 1,
+			"code" : 11000,
+			"errmsg" : "E11000 duplicate key error collection: mongodb.persons index: _id_ dup key: { _id: \"b\" }",
+			"op" : {
+				"_id" : "b",
+				"name" : "B"
+			}
+		}
+	],
+	"writeConcernErrors" : [ ],
+	"nInserted" : 1,
+	"nUpserted" : 0,
+	"nMatched" : 0,
+	"nModified" : 0,
+	"nRemoved" : 0,
+	"upserted" : [ ]
+})
+BulkWriteError@src/mongo/shell/bulk_api.js:367:48
+BulkWriteResult/this.toError@src/mongo/shell/bulk_api.js:332:24
+Bulk/this.execute@src/mongo/shell/bulk_api.js:1186:23
+DBCollection.prototype.insertMany@src/mongo/shell/crud_api.js:326:5
+@(shell):1:1
+
+> db.persons.find().pretty()
+{ "_id" : "a", "name" : "A" }
+{ "_id" : "b", "name" : "B" }
+{ "_id" : "c", "name" : " C" }
+{ "_id" : "d", "name" : "D" }
+{ "_id" : "e", "name" : " E" }
+
+=> E가 추가된 것을 볼 수 있음.
+※ import
+mongoimport -d, -c, --drop

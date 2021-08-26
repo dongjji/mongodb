@@ -1,0 +1,161 @@
+1. updateOne()
+  db.users.updateOne({_id: ObjectID(...)}, {$set: {name: "Max"}})
+
+2. updateMany()
+  db.users.updateMany({age: {$gt: 3}}, {$set: {name: "Max"}})
+
+3. $set
+
+4. $inc $mul
+  db.users.updateOne({name: "Manuel"}, {$inc: {age: 2}, $set: {name: "Max"}})
+    => 이름이 Manuel인 사람의 age를 2만큼 증가시킴, name을 Max로 바꿈
+  db.users.updateOne({name: "Manuel"}, {$inc: {age: -2}})
+  ※ db.users.updateOne({name: "Manuel"}, {$inc: {age: 2}, $set: {age: 30}})
+    => error 발생 inc와 set를 동시에 사용할 수 없음.
+
+5. $min & $max
+  Chris.age = 35
+  db.users.updateOne({name: "Chris"}, {$min: {age: 38}}) Chris의 age보다 38이 작으면 38로 체인지
+  db.users.updateOne({name: "Chris"}, {$max: {age: 32}}) Chris의 age보다 32가 크면 32로 체인지
+  db.users.updateOne({name: "Chris"}, {$mul: {age: 2}}) x2  Chris의 age를 2배
+
+6. $unset : Fields삭제하기
+  db.users.updateMany({}, {phone: null})
+  db.users.updateMany({isSporty: true}, {$unset: {phone: ""}}) // phone field 삭제
+
+7. $rename: Field 이름 변경하기
+  db.users.updateMany({}, {$rename: {age: "koreanAge"}}) age필드를 koreanAge로 변경
+
+8. upsert()
+  // Maria는 collection내에 존재하지 않음
+  db.users.updateOne({name: "Maria"}, {$set: {age: 29, hobbies: [{title: "Cooking", frequency: 3}]}}, {upsert: true})
+  upsert의 값을 true로 주게 되면 위의 속성들로 데이터를 추가하게됨
+    {
+      "_id": ObjectId(...),
+      "name": "Maria",
+      "age": 29
+      "hobbies": [
+        {
+          "title": "Cooking",
+          "frequency": 3
+        }
+      ]
+    }
+
+9. read파트에서 했던 내용을 가져오면
+  XX. $elemMatch vs $and
+    $and의 허점
+    {
+        name: "Max",
+        hobbies: [
+            {
+                title: "Sports",
+                frequency: 3   
+            },
+            {
+                title: "Cooking",
+                frequency: 6
+            }
+        ]
+    }
+
+    {
+        name: "Chris",
+        hobbies: [
+            {
+                title: "Sports",
+                frequency: 2   
+            },
+            {
+                title: "Cooking",
+                frequency: 3
+            }
+        ]
+    }
+    두 개의 데이터가 있을 때,
+    db.users.find({$and: [{"hobbies.title": "Sports"}, {"hobbies.frequency": {$gte: 3}}]})
+    의 뜻은 hobbies.title이 Sports이고 frequency가 3이상이어야 하므로
+    우리가 생각하는 답은 Max에 대한 데이터만 나와야 하지만, 두 데이터 모두 출력이 된다.
+    그 이유는 Chris의 데이터 중 hobbies.title이 Sports가 존재하고 hobbies.frequency가 Cooking에 존재하기때문에
+    true로 여겨져 있기 때문에 그렇다. 따라서 이 때, $elemMatch를 사용하여 이를 해결할 수 있다.
+
+    예시: db.users.find({hobbies: {$elemMatch: {title: "Sports", frequency: {$gte: 3}} }})
+  
+  이러한 점을 update에도 사용하면 된다.
+  db.users.updateMany({hobbies: {$elemMatch: {title: "Sports", frequency: {$gte: 3}}}, {$set: {"hobbies.$" : {title: "Sports"}}})
+
+※10.  $사인에 따른 차이점
+    {$set: {"hobbies.$": {title: "Sports"}} : hobbies안의 매칭된 첫번째! 데이터를 통째로 바꿔버리기
+    {$set: {"hobbies.$.highFrequency": true}} : hobbies 안의 매칭된 첫번째! 데이터의 hobbies.highFrequency속성 추가해주기
+  
+11. array안의 조건을 만족하는 모든 데이터를 업데이트하는 방법
+  db.users.updateMany({age: {$gt: 30}}, {$inc: {"hobbies.frequency": -1}}) => error 발생
+  db.users.updateMany({age: {$gt: 30}}, {$inc: {"hobbies.$[].frequency": -1}})
+  업데이트 전
+  {
+        "_id" : ObjectId("6115e41d49609f012aac92aa"),
+        "name" : "Manuel",
+        "hobbies" : [
+                {
+                        "title" : "Cooking",
+                        "frequency" : 5
+                },
+                {
+                        "title" : "Cars",
+                        "frequency" : 2
+                }
+        ],
+        "phone" : "012177972",
+        "age" : 32
+  }
+  업데이트 후
+  {
+        "_id" : ObjectId("6115e41d49609f012aac92aa"),
+        "name" : "Manuel",
+        "hobbies" : [
+                {
+                        "title" : "Cooking",
+                        "frequency" : 4
+                },
+                {
+                        "title" : "Cars",
+                        "frequency" : 1
+                }
+        ],
+        "phone" : "012177972",
+        "age" : 32
+  }
+
+12. $[]활용: 조건을 만족하는 데이터의 배열을 돌면서 조건에 만족하는 데이터들을 업데이트하는 방법
+  db.users.updateMany(
+    {"hobbies.frequency": {$gt: 2}},
+    {$set: {"hobbies.$[el].goodFrequency": true}},
+    {arrayFilters: [{"el.frequency": {$gt: 2}}]}
+  )
+  hobbies.frequency가 2보다 큰 데이터의 hobbies의 배열에서
+  frequency가 2보다 큰 데이터들의 goodFrequency값을 true로 설정
+
+13. $push: 배열에 요소 추가하기
+  db.users.updateOne({name: "Maria"}, {$push: {hobbies: {title: "Sports", frequency: 2}}}) // 1개 추가하기
+  db.users.updateOne(
+    {name: "Maria"},
+    {$push: {hobbies: {$each: [{title: "Good Wine", frequency: 1}, {title: "hiking", frequency: 2}]}}})
+  // 여러개 추가하기
+  db.users.updateOne(
+    {name: "Maria"},
+    {$push: {hobbies: {$each: [{title: "Good Wine", frequency: 1}, {title: "hiking", frequency: 2}], $sort: {frequency: -1}, $slice: 1}}})
+14. 배열에 요소 삭제하기
+  db.users.updateOne({name: "Maria"}, {$pull: {hobbies: {title: "hiking"}}}) title이 hiking인 데이터 삭제
+  db.users.updateOne({name: "Maria"}, {$pop: {hobbies: 1}}) 마지막 요소 삭제
+  db.users.updateOne({name: "Maria"}, {$pop: {hobbies: 1}}) 첫번째 요소 삭제
+
+15. $addToSet
+  db.users.updateOne({name: "Maria"}, {$addToSet: {hobbies: {title: "Sports", frequency: 2}}}) // push와 비슷
+  $push와 차이점: 이미 해당 데이터가 있는 경우 추가하지 않고 없는 경우에만 추가함(unique)
+
+
+DELETE : delete메소드는 간단하기 때문에 update하는김에 같이 묻어가겠다..
+1. db.users.deleteOne({조건}): 조건에 맞는 데이터 한개 삭제
+2. db.users.deleteMany({조건}): 조건에 맞는 데이터 모두 삭제
+3. db.users.deleteMany({}): 모든 데이터 삭제
+4. db.users.drop(): collection자체를 삭제
